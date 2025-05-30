@@ -3,6 +3,14 @@
 ## **1. Overview**
 AsiriaPOS is a next-generation Point-of-Sale system designed for small businesses. It integrates AI-driven analytics, mobile payments, and cloud-based transactions for an efficient and scalable experience.
 
+## 🚀 Features
+
+* **AI-Driven Analytics**: Gain insights into sales trends and customer behavior.
+* **Mobile Payments**: Seamless integration with M-Pesa API for mobile transactions.
+* **Cloud-Based Transactions**: Secure and accessible data storage on cloud platforms.
+* **Modular Architecture**: Easily extend or customize components as needed.
+* **Role-Based Access Control**: Define user roles and permissions for enhanced security.
+
 ## **2. Technology Stack**
 - **Backend Framework:** Django Framework (Python)
 - **Database:** MySQL
@@ -15,14 +23,14 @@ AsiriaPOS is a next-generation Point-of-Sale system designed for small businesse
 ## 📦 Installation
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/asiriapos.git
-cd asiriapos
+git clone https://github.com/yourusername/AsiriaPOS.git
+cd AsiriaPOS
 ```
 
 2. **Create virtual environment**
 ```bash
-python -m venv pos-venv
-source pos-venv/bin/activate  # On Windows: .\pos-venv\Scripts\activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. **Install dependencies**
