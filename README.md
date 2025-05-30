@@ -12,6 +12,71 @@ AsiriaPOS is a next-generation Point-of-Sale system designed for small businesse
 - **Caching:** Redis
 - **Logging & Monitoring:** Serilog, ELK Stack
 
+## 📦 Installation
+1. **Clone the repository**
+```bash
+git clone https://github.com/yourusername/asiriapos.git
+cd asiriapos
+```
+
+2. **Create virtual environment**
+```bash
+python -m venv pos-venv
+source pos-venv/bin/activate  # On Windows: .\pos-venv\Scripts\activate
+```
+
+3. **Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+4. **Configure environment variables**
+
+Create a `.env` file and add your database and secret configurations.
+
+5. **Run migrations**
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
+
+6. **Create a superuser**
+```bash
+python manage.py createsuperuser
+```
+
+7. **Start the development server**
+```bash
+python manage.py runserver
+```
+---
+
+## 📘 API Documentation
+
+* **Swagger UI**: [http://localhost:8000/swagger/](http://localhost:8000/swagger/)
+* **Redoc**: [http://localhost:8000/redoc/](http://localhost:8000/redoc/)
+
+The API supports full CRUD for:
+
+* Clients (`/api/clients/`)
+* Products (`/api/products/`)
+* Categories (`/api/categories/`)
+* Units (`/api/units/`)
+* Sales & Purchases (`/api/salesheaders/`, `/api/purchaseheaders/`)
+* Payments, Receipts, Expenses, etc.
+
+---
+
+## 🛡️ Roles & Permissions
+
+| Role     | Access Level                         |
+| -------- | ------------------------------------ |
+| Owner    | Full access to all data and features |
+| Manager  | Can manage sales, purchases, users   |
+| Employee | Limited to sales operations          |
+
+Authentication is required for all endpoints via JWT access tokens.
+
 ## **3. Architecture Components**
 ### **3.1 API Gateway**
 - Handles authentication, request validation, and rate limiting.
@@ -53,3 +118,16 @@ AsiriaPOS is a next-generation Point-of-Sale system designed for small businesse
 - **Payments Table:** PaymentID, SaleID, Method, Status, Timestamp
 - **Notifications Table:** NotificationID, UserID, Message, Status, Timestamp
 
+
+## 📨 Contact
+
+For support or inquiries:
+
+* 🌐 Website: [https://www.asiriatech.ke](https://www.asiriatech.ke)
+* 📧 Email: [support@asiriatech.ke](mailto:support@asiriatech.ke)
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** 

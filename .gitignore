@@ -1,0 +1,63 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Django related
+#*.log
+*.pot
+*.pyc
+db.sqlite3
+media/
+#staticfiles/
+local_settings.py
+
+# If using dotenv for secrets
+.env
+.env.*
+
+# MySQL dumps
+*.sql
+
+# VS Code settings
+.vscode/
+
+# PyCharm
+.idea/
+
+# MacOS and Linux
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+.cache
+nosetests.xml
+testdb.sqlite3
+
+# Migrations (optional: uncomment to exclude)
+# **/migrations/
+# !*/migrations/__init__.py
+
+# Swagger / API schema cache
+#*.swagger.json
+#*.swagger.yaml
+
+# pip dependency files
+#pip-log.txt
+
+# OS generated
+ehthumbs.db
+Icon?

@@ -1,0 +1,5 @@
+django
+djangorestframework
+drf_yasg
+mysqlclient
+Pillow
