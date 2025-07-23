@@ -1,10 +1,13 @@
+import uuid
 from django.db import models
 from users.models import UserClient
 from products.models import Product, Unit, Category
 from registry.models import Customer, PaymentOption
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 class SalesHeader(models.Model):
-    sales_header_id = models.AutoField(primary_key=True)
+    sales_header_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE)
@@ -19,7 +22,7 @@ class SalesHeader(models.Model):
         return f"Sale Header {self.order_number} by {self.user_client.username}"
 
 class SalesDetail(models.Model):
-    sales_detail_id = models.AutoField(primary_key=True)
+    sales_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     sales_header = models.ForeignKey(SalesHeader, on_delete=models.CASCADE, related_name='sales_details')
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -33,7 +36,7 @@ class SalesDetail(models.Model):
         return f"Sale Detail {self.sales_detail_id} for {self.product.name}"
     
 class Receipt(models.Model):
-    receipt_id = models.AutoField(primary_key=True)
+    receipt_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE)
@@ -48,3 +51,16 @@ class Receipt(models.Model):
 
     def __str__(self):
         return f"Receipt {self.receipt_number} for Sale {self.sales_header.order_number}"
+
+@receiver(post_save, sender=SalesDetail)
+def decrease_product_stock_on_sale(sender, instance, created, **kwargs):
+    if created:
+        product = instance.product
+        product.stock -= instance.quantity
+        product.save()
+
+@receiver(post_delete, sender=SalesDetail)
+def increase_product_stock_on_sale_delete(sender, instance, **kwargs):
+    product = instance.product
+    product.stock += instance.quantity
+    product.save()

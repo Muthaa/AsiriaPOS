@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from drf_yasg.utils import swagger_auto_schema
 from AsiriaPOS.mixins import SwaggerTagMixin  # Import SwaggerTagMixin
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 # Create your views here.
 from rest_framework import viewsets, permissions
@@ -11,8 +12,12 @@ from .models import UserClient, PasswordResetToken, UserClientManager  # Import 
 class UserClientViewSet(SwaggerTagMixin, viewsets.ModelViewSet):
     queryset = UserClient.objects.all()
     serializer_class = UserClientSerializer
-    # permission_classes = [permissions.IsAuthenticated]
     swagger_tag = "Clients"
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
 class PasswordResetTokenViewSet(viewsets.ModelViewSet):
     queryset = PasswordResetToken.objects.all()

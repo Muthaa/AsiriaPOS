@@ -26,23 +26,29 @@ from purchases.views import PurchaseHeaderViewSet, PurchaseDetailViewSet, Paymen
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
-from authentication.views import LoginView, LogoutView
+from drf_yasg.generators import OpenAPISchemaGenerator
+from authentication.views import LoginView, CustomLogoutView, CustomTokenObtainPairView, CustomTokenRefreshView
 from django.conf import settings
 
+# from wagtail import urls as wagtail_urls
+# from wagtail.admin import urls as wagtailadmin_urls
+# from wagtail.documents import urls as wagtaildocs_urls
 
-# Swagger Schema Configuration
-schema_view = get_schema_view(
-    openapi.Info(
-        title="AsiriaPOS API",
-        default_version='v1',
-        description="API documentation for AsiriaPOS",
-        terms_of_service="https://www.asiriatech.ke/terms/",
-        contact=openapi.Contact(email="support@asiriatech.ke"),
-        license=openapi.License(name="MIT License"),
-    ),
-    public=True,
-    permission_classes=[permissions.AllowAny],
-)
+from sales_views.views import TodaysSalesTotalAPIView
+
+class CustomSchemaGenerator(OpenAPISchemaGenerator):
+    def get_schema(self, request=None, public=False):
+        schema = super().get_schema(request, public)
+        schema.security = [{"Bearer": []}]
+        schema.securityDefinitions = {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": "JWT Authorization header using the Bearer scheme. Example: \"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...\""
+            }
+        }
+        return schema
 
 router = DefaultRouter()
 router.register(r'clients', UserClientViewSet, basename='clients')
@@ -61,16 +67,52 @@ router.register(r'paymentsoptions', PaymentOptionViewSet, basename='paymentsopti
 router.register(r'expensecategories', ExpenseCategoryViewSet, basename='expensecategories')
 router.register(r'expenses', ExpenseViewSet, basename='expenses')
 
+# Swagger Schema Configuration
+schema_view = get_schema_view(
+    openapi.Info(
+        title="AsiriaPOS API",
+        default_version='v1',
+        description="""API documentation for AsiriaPOS.""",
+        terms_of_service="https://www.asiriatech.ke/terms/",
+        contact=openapi.Contact(email="support@asiriatech.ke"),
+        license=openapi.License(name="MIT License"),
+    ),
+    public=True,
+    permission_classes=[permissions.AllowAny],
+    authentication_classes=[],
+    generator_class=CustomSchemaGenerator,
+    patterns=[
+        path('api/', include(router.urls)),
+        path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+        path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+        path('api/token/logout/', CustomLogoutView.as_view(), name='token_logout'),
+    ],
+)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     # path('api/auth/', include('authentication.urls')),
 
-    path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
-
+    # JWT authentication endpoints (official login/logout for API)
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/logout/', CustomLogoutView.as_view(), name='token_logout'),
+    path('api/sales/today/', TodaysSalesTotalAPIView.as_view(), name='todays-sales'),
+    
     # Swagger URLs
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
+    
+
+    # # Wagtail Urls
+    # # path('/', include(wagtailadmin_urls)),
+    # path('cms/', include(wagtailadmin_urls)),
+    # path('documents/', include(wagtaildocs_urls)),
+    # path('', include(wagtail_urls)),  # homepage + wagtail-managed pages
+
+    # path('login/', LoginView.as_view(), name='login'),
+    # path('logout/', LogoutView.as_view(), name='logout'),
+    
 ]

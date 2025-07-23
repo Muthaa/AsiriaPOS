@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from users.models import UserClient
 from django.db import models
@@ -5,7 +6,7 @@ from django.conf import settings
 
 # Create your models here.
 class Customer(models.Model):
-    customer_id = models.AutoField(primary_key=True)
+    customer_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='customers')
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
@@ -19,7 +20,7 @@ class Customer(models.Model):
         return self.name
     
 class Supplier(models.Model):
-    supplier_id = models.AutoField(primary_key=True)
+    supplier_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='suppliers')
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
@@ -33,7 +34,7 @@ class Supplier(models.Model):
         return self.name
     
 class PaymentOption(models.Model):
-    payment_option_id = models.AutoField(primary_key=True)
+    payment_option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='payment_options')
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
@@ -44,7 +45,7 @@ class PaymentOption(models.Model):
         return self.name
     
 class ExpenseCategory(models.Model):
-    expense_category_id = models.AutoField(primary_key=True)
+    expense_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='expense_categories')
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
@@ -55,7 +56,7 @@ class ExpenseCategory(models.Model):
         return self.name
 
 class Expense(models.Model):
-    expense_id = models.AutoField(primary_key=True)
+    expense_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='expenses')
     expense_category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, related_name='expenses')
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE, related_name='expenses')

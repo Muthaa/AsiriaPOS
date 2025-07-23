@@ -1,10 +1,13 @@
+import uuid
 from django.db import models
 from products.models import Product, Unit
 from users.models import UserClient
 from registry.models import Supplier, PaymentOption
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 class PurchaseHeader(models.Model):
-    purchase_header_id = models.AutoField(primary_key=True)
+    purchase_header_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='purchase_headers')
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='purchase_headers')
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE, related_name='purchase_headers')
@@ -22,7 +25,7 @@ class PurchaseHeader(models.Model):
         return f"Purchase Header {self.supplier.name} - {self.invoice_number} - {self.total_cost}"
  
 class PurchaseDetail(models.Model):
-    purchase_detail_id = models.AutoField(primary_key=True)
+    purchase_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='purchase_details')
     purchase_header = models.ForeignKey(PurchaseHeader, on_delete=models.CASCADE, related_name='purchase_details')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='purchase_details')
@@ -37,7 +40,7 @@ class PurchaseDetail(models.Model):
         return f"Purchase Detail {self.product.name} - {self.quantity} - {self.amount}"
 
 class Payment(models.Model):
-    payment_id = models.AutoField(primary_key=True)
+    payment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='payments')
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='payments')
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE, related_name='payments')
@@ -51,3 +54,16 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment {self.payment_id} - {self.amount_paid} - {self.payment_date}"
+
+@receiver(post_save, sender=PurchaseDetail)
+def increase_product_stock_on_purchase(sender, instance, created, **kwargs):
+    if created:
+        product = instance.product
+        product.stock += instance.quantity
+        product.save()
+
+@receiver(post_delete, sender=PurchaseDetail)
+def decrease_product_stock_on_purchase_delete(sender, instance, **kwargs):
+    product = instance.product
+    product.stock -= instance.quantity
+    product.save()

@@ -85,6 +85,62 @@ The API supports full CRUD for:
 
 Authentication is required for all endpoints via JWT access tokens.
 
+## Authentication (JWT)
+
+This project uses JWT authentication via [SimpleJWT](https://django-rest-framework-simplejwt.readthedocs.io/en/latest/).
+
+### Obtain Token (Login)
+
+POST `/api/token/`
+
+Request body:
+```json
+{
+  "phone_number": "your_phone_number",
+  "password": "your_password"
+}
+```
+
+Response:
+```json
+{
+  "refresh": "<refresh_token>",
+  "access": "<access_token>"
+}
+```
+
+### Refresh Token
+
+POST `/api/token/refresh/`
+
+Request body:
+```json
+{
+  "refresh": "<refresh_token>"
+}
+```
+
+Response:
+```json
+{
+  "access": "<new_access_token>"
+}
+```
+
+### Using the Access Token
+
+Include the following header in your requests:
+
+```
+Authorization: Bearer <access_token>
+```
+
+### API Documentation
+
+Interactive API docs (including JWT login/logout) are available at:
+- `/swagger/` (Swagger UI)
+- `/redoc/` (ReDoc)
+
 ## **3. Architecture Components**
 ### **3.1 API Gateway**
 - Handles authentication, request validation, and rate limiting.

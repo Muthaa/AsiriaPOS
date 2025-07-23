@@ -8,20 +8,20 @@ from .models import UserClient
 @admin.register(UserClient)
 class CustomUserAdmin(UserAdmin):
     model = UserClient
-    list_display = ('username', 'email', 'is_staff', 'is_superuser')
-    search_fields = ('username', 'email')
+    list_display = ('client_name', 'phone_number', 'email', 'is_staff', 'is_superuser')
+    search_fields = ('client_name', 'phone_number', 'email')
     ordering = ('date_joined',)
 
     fieldsets = (
-        (None, {'fields': ('username', 'email', 'password')}),
+        (None, {'fields': ('client_name', 'phone_number', 'email', 'password')}),
         ('Permissions', {'fields': ('is_staff', 'is_active', 'is_superuser', 'groups', 'user_permissions')}),
-        ('Personal Info', {'fields': ('first_name', 'last_name', 'phone_number')}),
+        ('Personal Info', {'fields': ('address',)}),
         ('Important Dates', {'fields': ('last_login', 'date_joined')}),
     )
 
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'email', 'password1', 'password2', 'is_staff', 'is_superuser'),
+            'fields': ('client_name', 'phone_number', 'email', 'password1', 'password2', 'is_staff', 'is_superuser'),
         }),
     )
