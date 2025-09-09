@@ -37,6 +37,7 @@ class Product(models.Model):
     minQuantity = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
+    average_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     stock = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -204,6 +205,99 @@ class StockAlert(models.Model):
         self.resolved_at = timezone.now()
         self.resolved_by = resolved_by_user
         self.save()
+
+class Location(models.Model):
+    location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='locations')
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20, unique=True)
+    address = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    class Meta:
+        unique_together = ('user_client', 'name')
+
+class ProductLocationStock(models.Model):
+    pls_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='product_location_stocks')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='location_stocks')
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='stocks')
+    quantity = models.IntegerField(default=0)
+    min_quantity = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('product', 'location')
+
+    def __str__(self):
+        return f"{self.product.name} @ {self.location.code}: {self.quantity}"
+
+class StockTransfer(models.Model):
+    transfer_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_transfers')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_transfers')
+    from_location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='transfers_out')
+    to_location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='transfers_in')
+    quantity = models.PositiveIntegerField()
+    reference = models.CharField(max_length=100, blank=True, null=True)
+    reason = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_transfers_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Transfer {self.product.name} {self.quantity} {self.from_location.code}->{self.to_location.code}"
+
+    def clean(self):
+        if self.from_location_id == self.to_location_id:
+            raise ValidationError('From and To locations must be different')
+
+    def apply(self):
+        self.clean()
+        # Fetch or create per-location stock records
+        src, _ = ProductLocationStock.objects.get_or_create(
+            user_client=self.user_client, product=self.product, location=self.from_location,
+            defaults={'quantity': 0}
+        )
+        dst, _ = ProductLocationStock.objects.get_or_create(
+            user_client=self.user_client, product=self.product, location=self.to_location,
+            defaults={'quantity': 0}
+        )
+        if src.quantity < self.quantity:
+            raise ValidationError('Insufficient stock at source location')
+        previous_src = src.quantity
+        previous_dst = dst.quantity
+        src.quantity -= self.quantity
+        dst.quantity += self.quantity
+        src.save()
+        dst.save()
+        # Log movements
+        StockMovement.objects.create(
+            user_client=self.user_client,
+            product=self.product,
+            movement_type='TRANSFER',
+            quantity=-int(self.quantity),
+            previous_stock=previous_src,
+            new_stock=src.quantity,
+            reference_number=self.reference,
+            reason=f"Transfer out to {self.to_location.code}",
+            created_by=self.created_by
+        )
+        StockMovement.objects.create(
+            user_client=self.user_client,
+            product=self.product,
+            movement_type='TRANSFER',
+            quantity=int(self.quantity),
+            previous_stock=previous_dst,
+            new_stock=dst.quantity,
+            reference_number=self.reference,
+            reason=f"Transfer in from {self.from_location.code}",
+            created_by=self.created_by
+        )
 
 
 

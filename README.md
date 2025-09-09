@@ -90,6 +90,17 @@ The API supports full CRUD for:
 
 Authentication is required for all endpoints via JWT access tokens.
 
+### Fine-grained permissions
+- `CanApproveRefunds`: Only Owners/Managers can approve returns and refunds
+  - Applies to: `POST /api/sales-returns/{id}/approve/`, `POST /api/sales-refunds/{id}/approve/`
+- `CanVoidTransactions`: Only Owners/Managers can void sales lines
+  - Applies to: `DELETE /api/salesdetails/{id}/`
+- `CanOverridePrices`: Reserved for Owners/Managers (hook available for price override flows)
+
+How to configure:
+1. Create Django groups named `Owner`, `Manager`, `Employee`.
+2. Assign users to groups. The permissions above check group membership.
+
 ## Authentication (JWT)
 
 This project uses JWT authentication via [SimpleJWT](https://django-rest-framework-simplejwt.readthedocs.io/en/latest/).
@@ -193,6 +204,95 @@ Example split payload:
 }
 ```
 
+### 3.4 Returns & Refunds
+- Record returns with reasons; stock increases and movements/audit are recorded.
+- Issue refunds (cash/card/mobile/store-credit) linked to a sale.
+
+Endpoints:
+- `POST /api/sales-returns/` (create return)
+- `GET /api/sales-returns/`
+- `POST /api/sales-returns/{id}/approve/` (approve return)
+- `POST /api/sales-refunds/` (create refund)
+- `GET /api/sales-refunds/`
+- `POST /api/sales-refunds/{id}/approve/` (approve refund)
+
+Example return payload:
+```json
+{
+  "user_client": "<user_client_id>",
+  "sales_header": "<sales_header_id>",
+  "product": "<product_id>",
+  "unit": "<unit_id>",
+  "quantity": 2,
+  "reason": "DAMAGED",
+  "notes": "Box torn"
+}
+```
+
+Example refund payload:
+```json
+{
+  "user_client": "<user_client_id>",
+  "sales_header": "<sales_header_id>",
+  "amount": 1750.00,
+  "method": "CASH",
+  "reference": "RF-00123"
+}
+```
+
+### 3.5 Purchase Orders → GRN
+- Create Purchase Orders (PO) and receive goods via GRN; stock increases on GRN.
+
+Endpoints:
+- `POST /api/poheaders/`, `POST /api/podetails/`
+- `POST /api/grnheaders/`, `POST /api/grndetails/`
+
+Example PO payloads:
+```json
+// Header
+{
+  "user_client": "<user_client_id>",
+  "supplier": "<supplier_id>",
+  "order_number": "PO-2025-0001",
+  "expected_date": "2025-09-01",
+  "notes": "Urgent"
+}
+```
+```json
+// Detail
+{
+  "user_client": "<user_client_id>",
+  "po_header": "<po_header_id>",
+  "product": "<product_id>",
+  "unit": "<unit_id>",
+  "quantity": 50,
+  "price_per_unit": 120.00
+}
+```
+
+Example GRN payloads:
+```json
+// Header
+{
+  "user_client": "<user_client_id>",
+  "supplier": "<supplier_id>",
+  "po_header": "<po_header_id>",
+  "grn_number": "GRN-2025-0001",
+  "notes": "Received in good condition"
+}
+```
+```json
+// Detail (increases stock)
+{
+  "user_client": "<user_client_id>",
+  "grn_header": "<grn_header_id>",
+  "product": "<product_id>",
+  "unit": "<unit_id>",
+  "quantity": 50,
+  "price_per_unit": 120.00
+}
+```
+
 ### 3.4 Audit Logs
 - Sensitive actions are recorded with who/when/what and before/after snapshots
 - Currently implemented for:
@@ -207,6 +307,57 @@ Admin: searchable and filterable under “Audit Logs”.
 Planned:
 - Refund logs, receipt reversals
 - Purchase/sales header voids
+
+### 3.6 Multi-location Inventory
+- Manage multiple locations/branches and track per-location stock.
+- Transfer stock between locations with audit trail and stock movements.
+
+Endpoints:
+- `POST /api/locations/`, `GET /api/locations/`
+- `POST /api/location-stocks/` (seed/adjust per-location stock)
+- `POST /api/stock-transfers/` to create, and `POST /api/stock-transfers/{id}/apply/` to move stock
+
+Example location:
+```json
+{
+  "user_client": "<user_client_id>",
+  "name": "Warehouse A",
+  "code": "WH-A",
+  "address": "Industrial Rd"
+}
+```
+
+### 3.7 Reservations (Layaway / Online Pending Orders)
+- Reserve stock for pending sales so it’s not sold elsewhere.
+- Confirm order to release reservations and proceed; cancel to free stock.
+
+Endpoints:
+- `POST /api/salesdetails/{id}/reserve/` (optional body: `{ "expiry_days": 2 }`)
+- `POST /api/salesheaders/{id}/confirm/`
+- `POST /api/salesheaders/{id}/cancel/`
+- `GET /api/sales-reservations/?product=<id>&is_active=true`
+
+Auto-release expired reservations:
+- Command: `python manage.py release_expired_reservations`
+- Schedule (Windows Task Scheduler):
+```
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\\Users\\hp\\Desktop\\POS\\vpos\\Scripts\\Activate.ps1'; cd 'C:\\Users\\hp\\Desktop\\POS\\AsiriaPOS'; python manage.py release_expired_reservations"
+```
+- Cron (Linux): `*/15 * * * * cd /path/AsiriaPOS && . venv/bin/activate && python manage.py release_expired_reservations`
+
+Example transfer:
+```json
+{
+  "user_client": "<user_client_id>",
+  "product": "<product_id>",
+  "from_location": "<location_id_src>",
+  "to_location": "<location_id_dst>",
+  "quantity": 10,
+  "reference": "TX-TR-0001",
+  "reason": "Replenish front store",
+  "created_by": "<user_client_id>"
+}
+```
 
 ---
 

@@ -20,6 +20,12 @@ class SalesHeader(models.Model):
     remaining_balance = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('CONFIRMED', 'Confirmed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
 
     def __str__(self):
         return f"Sale Header {self.order_number} by {self.user_client.username}"
@@ -83,6 +89,21 @@ class Receipt(models.Model):
     def __str__(self):
         return f"Receipt {self.receipt_number} for Sale {self.sales_header.order_number}"
 
+class SalesReservation(models.Model):
+    reservation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
+    sales_header = models.ForeignKey(SalesHeader, on_delete=models.CASCADE, related_name='reservations')
+    sales_detail = models.ForeignKey(SalesDetail, on_delete=models.CASCADE, related_name='reservation', null=True, blank=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reservations')
+    quantity = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    expiry_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Reserve {self.product.name} x{self.quantity} ({'ACTIVE' if self.is_active else 'RELEASED'})"
+
 class SalesReturn(models.Model):
     RETURN_REASONS = [
         ('DAMAGED', 'Damaged'),
@@ -99,9 +120,29 @@ class SalesReturn(models.Model):
     reason = models.CharField(max_length=20, choices=RETURN_REASONS, default='OTHER')
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_approved = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(UserClient, on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_returns_approved')
+    approved_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Return {self.sales_return_id} for {self.product.name}"
+
+    def approve(self, approver):
+        if self.is_approved:
+            raise ValidationError('Return already approved')
+        self.is_approved = True
+        self.approved_by = approver
+        self.approved_at = timezone.now()
+        self.save()
+        AuditLog.objects.create(
+            user=None,
+            action='REFUND',
+            model_name='SalesReturn',
+            object_id=str(self.sales_return_id),
+            reason='Return approved',
+            before_data=None,
+            after_data={'approved': True, 'quantity': self.quantity}
+        )
 
 class SalesRefund(models.Model):
     REFUND_METHODS = [
@@ -117,9 +158,29 @@ class SalesRefund(models.Model):
     method = models.CharField(max_length=20, choices=REFUND_METHODS)
     reference = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_approved = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(UserClient, on_delete=models.SET_NULL, null=True, blank=True, related_name='sales_refunds_approved')
+    approved_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Refund {self.refund_id} - {self.amount}"
+
+    def approve(self, approver):
+        if self.is_approved:
+            raise ValidationError('Refund already approved')
+        self.is_approved = True
+        self.approved_by = approver
+        self.approved_at = timezone.now()
+        self.save()
+        AuditLog.objects.create(
+            user=None,
+            action='REFUND',
+            model_name='SalesRefund',
+            object_id=str(self.refund_id),
+            reason='Refund approved',
+            before_data=None,
+            after_data={'approved': True, 'amount': float(self.amount)}
+        )
 
 class CashSession(models.Model):
     SESSION_STATUS = [

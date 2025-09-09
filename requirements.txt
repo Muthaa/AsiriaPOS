@@ -6,4 +6,6 @@ Pillow
 django-cors-headers
 djangorestframework-simplejwt
 django-filter
+python-barcode
+qrcode[pil]
 psycopg2

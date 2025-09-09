@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Unit, Product, StockMovement, StockAdjustment, StockAlert
+from .models import Category, Unit, Product, StockMovement, StockAdjustment, StockAlert, Location, ProductLocationStock, StockTransfer
 from users.models import UserClient
 
 
@@ -24,6 +24,7 @@ class ProductSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.BooleanField(read_only=True)
     is_out_of_stock = serializers.BooleanField(read_only=True)
     stock_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    average_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = Product
@@ -77,3 +78,19 @@ class ProductStockSummarySerializer(serializers.ModelSerializer):
         """Get recent stock movements for the product"""
         movements = obj.stock_movements.order_by('-created_at')[:10]
         return StockMovementSerializer(movements, many=True).data
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = '__all__'
+
+class ProductLocationStockSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductLocationStock
+        fields = '__all__'
+
+class StockTransferSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StockTransfer
+        fields = '__all__'
+        read_only_fields = ['transfer_id', 'created_at']
