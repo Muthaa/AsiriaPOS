@@ -1,6 +1,8 @@
 import uuid
 from django.db import models
 from users.models import UserClient 
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 # Create your models here.
 # This is the Product model for the AsiriaPOS application.
@@ -31,7 +33,7 @@ class Product(models.Model):
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=20, unique=True, blank=True)
     barcode = models.CharField(max_length=20, unique=True, blank=True)
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, null=True)
     minQuantity = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
@@ -51,6 +53,21 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_low_stock(self):
+        """Check if product is running low on stock"""
+        return self.stock <= self.minQuantity
+
+    @property
+    def is_out_of_stock(self):
+        """Check if product is out of stock"""
+        return self.stock <= 0
+
+    @property
+    def stock_value(self):
+        """Calculate total stock value"""
+        return self.stock * self.cost
 
     def save(self, *args, **kwargs):
         if not self.sku or self.sku == '':
@@ -72,6 +89,121 @@ class Product(models.Model):
             barcode = str(uuid.uuid4().int)[:13]
             if not Product.objects.filter(barcode=barcode).exists():
                 return barcode
+
+class StockMovement(models.Model):
+    """Track all stock movements with reasons"""
+    MOVEMENT_TYPES = [
+        ('PURCHASE', 'Purchase'),
+        ('SALE', 'Sale'),
+        ('ADJUSTMENT', 'Stock Adjustment'),
+        ('RETURN', 'Return'),
+        ('DAMAGE', 'Damage/Loss'),
+        ('TRANSFER', 'Transfer'),
+        ('INITIAL', 'Initial Stock'),
+    ]
+
+    movement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_movements')
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
+    quantity = models.IntegerField()  # Positive for additions, negative for reductions
+    previous_stock = models.IntegerField()
+    new_stock = models.IntegerField()
+    reference_number = models.CharField(max_length=100, blank=True, null=True)  # Invoice, order number, etc.
+    reason = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_movements_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.movement_type} - {self.product.name} - {self.quantity}"
+
+    def save(self, *args, **kwargs):
+        if not self.previous_stock:
+            self.previous_stock = self.product.stock
+        if not self.new_stock:
+            self.new_stock = self.previous_stock + self.quantity
+        super().save(*args, **kwargs)
+
+class StockAdjustment(models.Model):
+    """Manual stock adjustments"""
+    ADJUSTMENT_TYPES = [
+        ('CORRECTION', 'Stock Correction'),
+        ('DAMAGE', 'Damage/Loss'),
+        ('EXPIRY', 'Expiry'),
+        ('THEFT', 'Theft'),
+        ('PHYSICAL_COUNT', 'Physical Count'),
+        ('OTHER', 'Other'),
+    ]
+
+    adjustment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_adjustments')
+    adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPES)
+    quantity_adjusted = models.IntegerField()  # Can be positive or negative
+    reason = models.TextField()
+    reference_number = models.CharField(max_length=100, blank=True, null=True)
+    created_by = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_adjustments_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_adjustments_approved', null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.adjustment_type} - {self.product.name} - {self.quantity_adjusted}"
+
+    def approve(self, approved_by_user):
+        """Approve the stock adjustment"""
+        if not self.is_approved:
+            self.is_approved = True
+            self.approved_by = approved_by_user
+            self.approved_at = timezone.now()
+            
+            # Update product stock
+            self.product.stock += self.quantity_adjusted
+            
+            # Create stock movement record
+            StockMovement.objects.create(
+                user_client=self.user_client,
+                product=self.product,
+                movement_type='ADJUSTMENT',
+                quantity=self.quantity_adjusted,
+                previous_stock=self.product.stock - self.quantity_adjusted,
+                new_stock=self.product.stock,
+                reference_number=self.reference_number,
+                reason=self.reason,
+                created_by=self.created_by
+            )
+            
+            self.product.save()
+            self.save()
+
+class StockAlert(models.Model):
+    """Stock alerts for low stock notifications"""
+    ALERT_TYPES = [
+        ('LOW_STOCK', 'Low Stock'),
+        ('OUT_OF_STOCK', 'Out of Stock'),
+        ('OVERSTOCK', 'Overstock'),
+    ]
+
+    alert_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_alerts')
+    alert_type = models.CharField(max_length=20, choices=ALERT_TYPES)
+    message = models.TextField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='stock_alerts_resolved', null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.alert_type} - {self.product.name}"
+
+    def resolve(self, resolved_by_user):
+        """Resolve the stock alert"""
+        self.is_active = False
+        self.resolved_at = timezone.now()
+        self.resolved_by = resolved_by_user
+        self.save()
 
 
 

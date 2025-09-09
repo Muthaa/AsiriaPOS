@@ -19,9 +19,9 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from users.views import UserClientViewSet
-from products.views import ProductViewSet, UnitViewSet, CategoryViewSet
+from products.views import ProductViewSet, UnitViewSet, CategoryViewSet, StockMovementViewSet, StockAdjustmentViewSet, StockAlertViewSet
 from registry.views import CustomerViewSet, SupplierViewSet, PaymentOptionViewSet, ExpenseCategoryViewSet, ExpenseViewSet
-from sales.views import SalesHeaderViewSet, SalesDetailViewSet, ReceiptViewSet
+from sales.views import SalesHeaderViewSet, SalesDetailViewSet, ReceiptViewSet, CashSessionViewSet, SalesPaymentViewSet, SalesReturnViewSet, SalesRefundViewSet
 from purchases.views import PurchaseHeaderViewSet, PurchaseDetailViewSet, PaymentViewSet
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
@@ -55,9 +55,16 @@ router.register(r'clients', UserClientViewSet, basename='clients')
 router.register(r'products', ProductViewSet, basename='products')
 router.register(r'units', UnitViewSet, basename='units')
 router.register(r'categories', CategoryViewSet, basename='categories')
+router.register(r'stock-movements', StockMovementViewSet, basename='stock-movements')
+router.register(r'stock-adjustments', StockAdjustmentViewSet, basename='stock-adjustments')
+router.register(r'stock-alerts', StockAlertViewSet, basename='stock-alerts')
 router.register(r'salesheaders', SalesHeaderViewSet, basename='salesheaders')
 router.register(r'salesdetails', SalesDetailViewSet, basename='salesdetails')
 router.register(r'receipts', ReceiptViewSet, basename='receipts')
+router.register(r'cash-sessions', CashSessionViewSet, basename='cash-sessions')
+router.register(r'sales-payments', SalesPaymentViewSet, basename='sales-payments')
+router.register(r'sales-returns', SalesReturnViewSet, basename='sales-returns')
+router.register(r'sales-refunds', SalesRefundViewSet, basename='sales-refunds')
 router.register(r'purchaseheaders', PurchaseHeaderViewSet, basename='purchaseheaders')
 router.register(r'purchasedetails', PurchaseDetailViewSet, basename='purchasedetails')
 router.register(r'payments', PaymentViewSet, basename='payments')

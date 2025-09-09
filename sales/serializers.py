@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SalesHeader, SalesDetail, Receipt
+from .models import SalesHeader, SalesDetail, Receipt, CashSession, SalesPayment, SalesReturn, SalesRefund
 from users.models import UserClient
 from registry.models import Customer, PaymentOption
 
@@ -32,3 +32,27 @@ class ReceiptSerializer(serializers.ModelSerializer):
         model = Receipt
         fields = '__all__'
         read_only_fields = ['receipt_id', 'created_at', 'updated_at']
+
+class CashSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashSession
+        fields = '__all__'
+        read_only_fields = ['session_id', 'opened_at', 'closed_at', 'status']
+
+class SalesPaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesPayment
+        fields = '__all__'
+        read_only_fields = ['sales_payment_id', 'created_at']
+
+class SalesReturnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesReturn
+        fields = '__all__'
+        read_only_fields = ['sales_return_id', 'created_at']
+
+class SalesRefundSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalesRefund
+        fields = '__all__'
+        read_only_fields = ['refund_id', 'created_at']

@@ -10,6 +10,9 @@ AsiriaPOS is a next-generation Point-of-Sale system designed for small businesse
 * **Cloud-Based Transactions**: Secure and accessible data storage on cloud platforms.
 * **Modular Architecture**: Easily extend or customize components as needed.
 * **Role-Based Access Control**: Define user roles and permissions for enhanced security.
+* **Stock Control**: Real-time stock updates, movement tracking, adjustments, and alerts.
+* **Cash Sessions & Split Payments**: Track cash drawer sessions and support multi-method payments per sale.
+* **Audit Logs**: Sensitive actions (voids, price overrides, refunds) are recorded with who/when/what.
 
 ## **2. Technology Stack**
 - **Backend Framework:** Django Framework (Python)
@@ -72,6 +75,8 @@ The API supports full CRUD for:
 * Units (`/api/units/`)
 * Sales & Purchases (`/api/salesheaders/`, `/api/purchaseheaders/`)
 * Payments, Receipts, Expenses, etc.
+* Stock control (`/api/stock-movements/`, `/api/stock-adjustments/`, `/api/stock-alerts/`)
+* Cash sessions (`/api/cash-sessions/`) and Sales payments (`/api/sales-payments/`)
 
 ---
 
@@ -141,36 +146,93 @@ Interactive API docs (including JWT login/logout) are available at:
 - `/swagger/` (Swagger UI)
 - `/redoc/` (ReDoc)
 
-## **3. Architecture Components**
-### **3.1 API Gateway**
+## **3. Key POS Modules**
+
+### 3.1 Stock Control
+- Real-time stock updates on sales and purchases
+- Movement tracking with reasons and references
+- Adjustments with approval workflow
+- Low/out-of-stock alerts
+
+Endpoints:
+- `/api/products/low_stock/`, `/api/products/out_of_stock/`
+- `/api/stock-movements/`, `/api/stock-adjustments/`, `/api/stock-alerts/`
+
+### 3.2 Cash Sessions
+- Open/close cash drawer sessions (with opening float and closing totals)
+- Associate sales payments to sessions
+
+Endpoints:
+- `POST /api/cash-sessions/` (open)
+- `POST /api/cash-sessions/{id}/close/` (close)
+- `GET /api/cash-sessions/`
+
+Example close payload:
+```json
+{
+  "closing_total": 125000.00
+}
+```
+
+### 3.3 Split Payments
+- Support multiple payment methods per sale
+
+Endpoints:
+- `POST /api/sales-payments/` (single payment)
+- `POST /api/sales-payments/split/` (batch create payments for a sale)
+
+Example split payload:
+```json
+{
+  "sales_header": "<sales_header_id>",
+  "session": "<cash_session_id>",
+  "payments": [
+    { "method": "CASH", "amount": 500.00 },
+    { "method": "CARD", "amount": 1250.00, "reference": "TX-123" }
+  ]
+}
+```
+
+### 3.4 Audit Logs
+- Sensitive actions are recorded with who/when/what and before/after snapshots
+- Currently implemented for:
+  - Price override on `SalesDetail` updates
+  - Void on `SalesDetail` delete
+
+Model: `Domain.AuditLog`
+Fields: `action`, `model_name`, `object_id`, `user`, `reason`, `before_data`, `after_data`, `created_at`
+
+Admin: searchable and filterable under “Audit Logs”.
+
+Planned:
+- Refund logs, receipt reversals
+- Purchase/sales header voids
+
+---
+
+## **4. Architecture Components**
+### **4.1 API Gateway**
 - Handles authentication, request validation, and rate limiting.
 
-### **3.2 Authentication & User Management Service**
+### **4.2 Authentication & User Management Service**
 - Secure login with biometric support.
 - Role-based access control.
 
-### **3.3 Product & Inventory Service**
+### **4.3 Product & Inventory Service**
 - AI-powered demand forecasting.
 - Smart inventory management with barcode scanning.
 
-### **3.4 Sales & Purchase Service**
+### **4.4 Sales & Purchase Service**
 - Manages sales transactions and purchase orders.
 - Real-time transaction syncing.
 
-### **3.5 Reporting & Analytics Service**
+### **4.5 Reporting & Analytics Service**
 - AI-driven sales insights and trends.
 - Exportable reports for business intelligence.
 
-### **3.6 Notification Service**
+### **4.6 Notification Service**
 - Low stock alerts and real-time notifications.
 - WhatsApp Business integration for customer engagement.
-
-## **4. Modules**
-- **User Management Module:** Secure authentication and role handling.
-- **Product Management Module:** Stock tracking and barcode scanning.
-- **Sales & Purchase Module:** Order processing, payments, and invoices.
-- **AI Analytics Module:** Business insights and smart recommendations.
-- **Notification Module:** Alerts for stock levels and transactions.
 
 ## **5. Database Schema**
 - **Users Table:** UserID, Name, Email, Role, PasswordHash
@@ -181,7 +243,6 @@ Interactive API docs (including JWT login/logout) are available at:
 - **Suppliers Table:** SupplierID, Name, Contact, Address
 - **Payments Table:** PaymentID, SaleID, Method, Status, Timestamp
 - **Notifications Table:** NotificationID, UserID, Message, Status, Timestamp
-
 
 ## 📨 Contact
 

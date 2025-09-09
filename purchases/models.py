@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from products.models import Product, Unit
+from products.models import Product, Unit, StockMovement
 from users.models import UserClient
 from registry.models import Supplier, PaymentOption
 from django.db.models.signals import post_save, post_delete
@@ -59,11 +59,39 @@ class Payment(models.Model):
 def increase_product_stock_on_purchase(sender, instance, created, **kwargs):
     if created:
         product = instance.product
+        previous_stock = product.stock
         product.stock += instance.quantity
         product.save()
+        
+        # Create stock movement record
+        StockMovement.objects.create(
+            user_client=instance.user_client,
+            product=product,
+            movement_type='PURCHASE',
+            quantity=instance.quantity,
+            previous_stock=previous_stock,
+            new_stock=product.stock,
+            reference_number=instance.purchase_header.invoice_number,
+            reason=f"Purchase from {instance.purchase_header.supplier.name}",
+            created_by=instance.user_client
+        )
 
 @receiver(post_delete, sender=PurchaseDetail)
 def decrease_product_stock_on_purchase_delete(sender, instance, **kwargs):
     product = instance.product
+    previous_stock = product.stock
     product.stock -= instance.quantity
     product.save()
+    
+    # Create stock movement record for reversal
+    StockMovement.objects.create(
+        user_client=instance.user_client,
+        product=product,
+        movement_type='ADJUSTMENT',
+        quantity=-instance.quantity,
+        previous_stock=previous_stock,
+        new_stock=product.stock,
+        reference_number=f"REVERSAL-{instance.purchase_header.invoice_number}",
+        reason="Purchase detail deleted - stock reversal",
+        created_by=instance.user_client
+    )

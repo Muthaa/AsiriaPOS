@@ -5,3 +5,5 @@ mysqlclient
 Pillow
 django-cors-headers
 djangorestframework-simplejwt
+django-filter
+psycopg2
