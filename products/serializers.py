@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Category, Unit, Product, StockMovement, StockAdjustment, StockAlert, Location, ProductLocationStock, StockTransfer
 from users.models import UserClient
-
+from decimal import Decimal, InvalidOperation
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,12 +23,23 @@ class ProductSerializer(serializers.ModelSerializer):
     unit_name = serializers.CharField(source='unit.name', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
     is_out_of_stock = serializers.BooleanField(read_only=True)
-    stock_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    average_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    
+    # stock_value = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    stock_value = serializers.CharField(read_only=True)
+    average_cost = serializers.CharField(read_only=True)
     class Meta:
         model = Product
         fields = '__all__'
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Ensure all decimal fields are properly formatted
+        for field in ['price', 'cost', 'average_cost']:
+            value = rep.get(field)
+            try:
+                rep[field] = str(Decimal(value).quantize(Decimal('0.01')))
+            except (InvalidOperation, TypeError):
+                rep[field] = "0.00"
+        return rep
 
 class StockMovementSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)

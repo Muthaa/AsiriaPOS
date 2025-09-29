@@ -70,6 +70,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",  # Berry dashboard
     "http://localhost:8000",
     "https://dashboard.asiriapos.com",
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
 ]
 
 
