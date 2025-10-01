@@ -26,7 +26,7 @@ AsiriaPOS is a next-generation Point-of-Sale system designed for small businesse
 ## 📦 Installation
 1. **Clone the repository**
 ```bash
-git clone https://github.com/Muthaa/AsiriaPOS.git
+git clone https://github.com/muthaa/AsiriaPOS.git
 cd AsiriaPOS
 ```
 
