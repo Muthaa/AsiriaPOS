@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Customer, Supplier, PaymentOption, ExpenseCategory, Expense, BusinessProfile
+from .models import Customer, Supplier, PaymentOption, ExpenseCategory, Expense, BusinessProfile, AnonymousProfile
 from users.models import UserClient
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -51,3 +51,12 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
         model = BusinessProfile
         fields = '__all__'
         read_only_fields = ('created_at', 'updated_at')
+
+
+class AnonymousProfileSerializer(serializers.ModelSerializer):
+    user_client = serializers.PrimaryKeyRelatedField(queryset=UserClient.objects.all())
+
+    class Meta:
+        model = AnonymousProfile
+        fields = '__all__'
+        read_only_fields = ('first_seen', 'last_seen')

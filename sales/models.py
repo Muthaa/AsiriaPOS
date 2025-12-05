@@ -7,17 +7,31 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from Domain.models import AuditLog
+from Domain.models import AuditLog 
 
 class SalesHeader(models.Model):
     sales_header_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, blank=True, null=True)
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE)
     order_number = models.CharField(max_length=255, unique=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     remaining_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    # Anonymous and link keys
+    anonymous_customer_id = models.UUIDField(blank=True, null=True)
+    mpesa_token_hash = models.CharField(max_length=128, blank=True, null=True)
+    card_token_hash = models.CharField(max_length=128, blank=True, null=True)
+    credit_account_code = models.CharField(max_length=64, blank=True, null=True)
+    PAYMENT_METHODS = [
+        ('CASH', 'Cash'),
+        ('CARD', 'Card'),
+        ('MOBILE', 'Mobile Money'),
+        ('CREDIT', 'Store Credit'),
+        ('OTHER', 'Other'),
+    ]
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
+    terminal_id = models.CharField(max_length=64, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     STATUS_CHOICES = [
@@ -75,12 +89,27 @@ class SalesDetail(models.Model):
 class Receipt(models.Model):
     receipt_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, blank=True, null=True)
     payment_option = models.ForeignKey(PaymentOption, on_delete=models.CASCADE)
     sales_header = models.ForeignKey(SalesHeader, on_delete=models.CASCADE, related_name='receipts')
     receipt_number = models.CharField(max_length=255, unique=True)
+    # Short token printed/encoded in QR to link later
+    link_token = models.CharField(max_length=16, blank=True, null=True, unique=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
+    # Anonymous and link keys mirrored on receipt for quick queries
+    anonymous_customer_id = models.UUIDField(blank=True, null=True)
+    mpesa_token_hash = models.CharField(max_length=128, blank=True, null=True)
+    card_token_hash = models.CharField(max_length=128, blank=True, null=True)
+    credit_account_code = models.CharField(max_length=64, blank=True, null=True)
+    PAYMENT_METHODS = [
+        ('CASH', 'Cash'),
+        ('CARD', 'Card'),
+        ('MOBILE', 'Mobile Money'),
+        ('CREDIT', 'Store Credit'),
+        ('OTHER', 'Other'),
+    ]
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHODS, default='CASH')
     payment_date = models.DateTimeField(auto_now_add=True)
     narration = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)

@@ -108,7 +108,7 @@ DATABASES = {
         'USER': 'Asiria',
         'PASSWORD': 'Chilled@Bar',
         'HOST': 'localhost',
-        'PORT': '3307',
+        'PORT': '3306',
     }
 }
 
@@ -180,7 +180,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -188,3 +188,6 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'user_client_id',  # <-- set this to your PK field
     'USER_ID_CLAIM': 'user_client_id',  # <-- set this to your PK field
 }
+
+# Token hashing salt for payment identifiers (do not expose publicly)
+TOKEN_HASH_SALT = "change-this-salt-in-production"

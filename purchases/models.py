@@ -6,6 +6,7 @@ from registry.models import Supplier, PaymentOption
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db import transaction
+from django.utils.crypto import get_random_string
 
 class PurchaseHeader(models.Model):
     purchase_header_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
@@ -24,6 +25,15 @@ class PurchaseHeader(models.Model):
 
     def __str__(self):
         return f"Purchase Header {self.supplier.name} - {self.invoice_number} - {self.total_cost}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate order_number if missing
+        if not self.order_number:
+            self.order_number = f"PU-{get_random_string(8).upper()}"
+        # Auto-generate invoice_number if missing (distinct from order)
+        if not self.invoice_number:
+            self.invoice_number = f"INV-{get_random_string(8).upper()}"
+        super().save(*args, **kwargs)
  
 class PurchaseDetail(models.Model):
     purchase_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
@@ -63,11 +73,18 @@ class PurchaseOrderHeader(models.Model):
     order_number = models.CharField(max_length=255, unique=True)
     expected_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
+    converted_purchase = models.OneToOneField('PurchaseHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='source_po')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"PO {self.order_number} - {self.supplier.name}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate order_number if missing
+        if not self.order_number:
+            self.order_number = f"PO-{get_random_string(8).upper()}"
+        super().save(*args, **kwargs)
 
 class PurchaseOrderDetail(models.Model):
     po_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
@@ -87,7 +104,8 @@ class GRNHeader(models.Model):
     grn_header_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user_client = models.ForeignKey(UserClient, on_delete=models.CASCADE, related_name='grn_headers')
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='grn_headers')
-    po_header = models.ForeignKey(PurchaseOrderHeader, on_delete=models.SET_NULL, null=True, blank=True, related_name='grn_headers')
+    po_header = models.ForeignKey(PurchaseOrderHeader, on_delete=models.SET_NULL, null=True, blank=True, related_name='po_grn_headers')
+    purchase_header = models.ForeignKey(PurchaseHeader, on_delete=models.CASCADE, related_name='grn_headers')
     grn_number = models.CharField(max_length=255, unique=True)
     received_date = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, null=True)
@@ -111,56 +129,56 @@ class GRNDetail(models.Model):
     def __str__(self):
         return f"GRN Detail {self.product.name} - {self.quantity}"
 
-@receiver(post_save, sender=PurchaseDetail)
-def increase_product_stock_on_purchase(sender, instance, created, **kwargs):
-    if created:
-        product = instance.product
-        previous_stock = product.stock
-        product.stock += instance.quantity
-        # Weighted average cost update
-        try:
-            current_qty = previous_stock
-            current_cost = product.average_cost or product.cost
-            incoming_qty = instance.quantity
-            incoming_cost = float(instance.price_per_unit) - float(instance.discount or 0)
-            new_avg = ((current_qty * float(current_cost)) + (incoming_qty * incoming_cost)) / max(current_qty + incoming_qty, 1)
-            product.average_cost = new_avg
-        except Exception:
-            pass
-        product.save()
+# @receiver(post_save, sender=PurchaseDetail)
+# def increase_product_stock_on_purchase(sender, instance, created, **kwargs):
+#     if created:
+#         product = instance.product
+#         previous_stock = product.stock
+#         product.stock += instance.quantity
+#         # Weighted average cost update
+#         try:
+#             current_qty = previous_stock
+#             current_cost = product.average_cost or product.cost
+#             incoming_qty = instance.quantity
+#             incoming_cost = float(instance.price_per_unit) - float(instance.discount or 0)
+#             new_avg = ((current_qty * float(current_cost)) + (incoming_qty * incoming_cost)) / max(current_qty + incoming_qty, 1)
+#             product.average_cost = new_avg
+#         except Exception:
+#             pass
+#         product.save()
         
-        # Create stock movement record
-        StockMovement.objects.create(
-            user_client=instance.user_client,
-            product=product,
-            movement_type='PURCHASE',
-            quantity=instance.quantity,
-            previous_stock=previous_stock,
-            new_stock=product.stock,
-            reference_number=instance.purchase_header.invoice_number,
-            reason=f"Purchase from {instance.purchase_header.supplier.name}",
-            created_by=instance.user_client
-        )
+#         # Create stock movement record
+#         StockMovement.objects.create(
+#             user_client=instance.user_client,
+#             product=product,
+#             movement_type='PURCHASE',
+#             quantity=instance.quantity,
+#             previous_stock=previous_stock,
+#             new_stock=product.stock,
+#             reference_number=instance.purchase_header.invoice_number,
+#             reason=f"Purchase from {instance.purchase_header.supplier.name}",
+#             created_by=instance.user_client
+#         )
 
-@receiver(post_delete, sender=PurchaseDetail)
-def decrease_product_stock_on_purchase_delete(sender, instance, **kwargs):
-    product = instance.product
-    previous_stock = product.stock
-    product.stock -= instance.quantity
-    product.save()
+# @receiver(post_delete, sender=PurchaseDetail)
+# def decrease_product_stock_on_purchase_delete(sender, instance, **kwargs):
+#     product = instance.product
+#     previous_stock = product.stock
+#     product.stock -= instance.quantity
+#     product.save()
     
-    # Create stock movement record for reversal
-    StockMovement.objects.create(
-        user_client=instance.user_client,
-        product=product,
-        movement_type='ADJUSTMENT',
-        quantity=-instance.quantity,
-        previous_stock=previous_stock,
-        new_stock=product.stock,
-        reference_number=f"REVERSAL-{instance.purchase_header.invoice_number}",
-        reason="Purchase detail deleted - stock reversal",
-        created_by=instance.user_client
-    )
+#     # Create stock movement record for reversal
+#     StockMovement.objects.create(
+#         user_client=instance.user_client,
+#         product=product,
+#         movement_type='ADJUSTMENT',
+#         quantity=-instance.quantity,
+#         previous_stock=previous_stock,
+#         new_stock=product.stock,
+#         reference_number=f"REVERSAL-{instance.purchase_header.invoice_number}",
+#         reason="Purchase detail deleted - stock reversal",
+#         created_by=instance.user_client
+#     )
 
 @receiver(post_save, sender=GRNDetail)
 def increase_product_stock_on_grn(sender, instance, created, **kwargs):

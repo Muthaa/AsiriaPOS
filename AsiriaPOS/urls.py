@@ -20,9 +20,15 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from users.views import UserClientViewSet
 from products.views import ProductViewSet, UnitViewSet, CategoryViewSet, StockMovementViewSet, StockAdjustmentViewSet, StockAlertViewSet, LocationViewSet, ProductLocationStockViewSet, StockTransferViewSet
-from registry.views import CustomerViewSet, SupplierViewSet, PaymentOptionViewSet, ExpenseCategoryViewSet, ExpenseViewSet
+from registry.views import CustomerViewSet, SupplierViewSet, PaymentOptionViewSet, ExpenseCategoryViewSet, ExpenseViewSet, AnonymousIdentifyAPIView, AnonymousProfileViewSet
 from sales.views import SalesHeaderViewSet, SalesDetailViewSet, ReceiptViewSet, CashSessionViewSet, SalesPaymentViewSet, SalesReturnViewSet, SalesRefundViewSet, SalesReservationViewSet
-from purchases.views import PurchaseHeaderViewSet, PurchaseDetailViewSet, PaymentViewSet, PurchaseOrderHeaderViewSet, PurchaseOrderDetailViewSet, GRNHeaderViewSet, GRNDetailViewSet
+from purchases.views import (
+    PurchaseHeaderViewSet, PurchaseDetailViewSet, PaymentViewSet,
+    PurchaseOrderHeaderViewSet, PurchaseOrderDetailViewSet, GRNHeaderViewSet, GRNDetailViewSet,
+    PurchaseOrderCreateAPIView, PurchaseOrderConvertAPIView, PurchaseGenerateGRNAPIView,
+    PurchaseOrderRetrieveHeaderAPIView, PurchaseOrderRetrieveFullAPIView,
+    PurchaseRetrieveHeaderAPIView, PurchaseRetrieveFullAPIView,
+)
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -34,7 +40,7 @@ from django.conf import settings
 # from wagtail.admin import urls as wagtailadmin_urls
 # from wagtail.documents import urls as wagtaildocs_urls
 
-from sales_views.views import TodaysSalesTotalAPIView
+from sales_views.views import TodaysSalesTotalAPIView, CheckoutInitializeAPIView, ReceiptLinkAPIView, ReceiptLinkByTokenAPIView
 
 class CustomSchemaGenerator(OpenAPISchemaGenerator):
     def get_schema(self, request=None, public=False):
@@ -81,6 +87,7 @@ router.register(r'suppliers', SupplierViewSet, basename='suppliers')
 router.register(r'paymentsoptions', PaymentOptionViewSet, basename='paymentsoptions')
 router.register(r'expensecategories', ExpenseCategoryViewSet, basename='expensecategories')
 router.register(r'expenses', ExpenseViewSet, basename='expenses')
+router.register(r'anonymousprofiles', AnonymousProfileViewSet, basename='anonymousprofiles')
 
 # Swagger Schema Configuration
 schema_view = get_schema_view(
@@ -96,12 +103,6 @@ schema_view = get_schema_view(
     permission_classes=[permissions.AllowAny],
     authentication_classes=[],
     generator_class=CustomSchemaGenerator,
-    patterns=[
-        path('api/', include(router.urls)),
-        path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-        path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-        path('api/token/logout/', CustomLogoutView.as_view(), name='token_logout'),
-    ],
 )
 
 urlpatterns = [
@@ -114,6 +115,18 @@ urlpatterns = [
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', CustomLogoutView.as_view(), name='token_logout'),
     path('api/sales/today/', TodaysSalesTotalAPIView.as_view(), name='todays-sales'),
+    path('api/checkout/initialize/', CheckoutInitializeAPIView.as_view(), name='checkout-initialize'),
+    path('api/receipt/link/', ReceiptLinkAPIView.as_view(), name='receipt-link'),
+    path('api/receipt/link-token/', ReceiptLinkByTokenAPIView.as_view(), name='receipt-link-token'),
+    # Purchases flow endpoints
+    path('api/purchase-orders/create/', PurchaseOrderCreateAPIView.as_view(), name='po-create'),
+    path('api/purchase-orders/<uuid:po_header_id>/convert-to-purchase/', PurchaseOrderConvertAPIView.as_view(), name='po-convert'),
+    path('api/purchase-orders/<uuid:po_header_id>/header/', PurchaseOrderRetrieveHeaderAPIView.as_view(), name='po-get-header'),
+    path('api/purchase-orders/<uuid:po_header_id>/full/', PurchaseOrderRetrieveFullAPIView.as_view(), name='po-get-full'),
+    path('api/purchases/<uuid:purchase_header_id>/generate-grn/', PurchaseGenerateGRNAPIView.as_view(), name='purchase-generate-grn'),
+    path('api/purchases/<uuid:purchase_header_id>/header/', PurchaseRetrieveHeaderAPIView.as_view(), name='purchase-get-header'),
+    path('api/purchases/<uuid:purchase_header_id>/full/', PurchaseRetrieveFullAPIView.as_view(), name='purchase-get-full'),
+    path('api/anonymousprofiles/<uuid:anonymous_id>/identify/', AnonymousIdentifyAPIView.as_view(), name='anonymous-identify'),
     
     # Swagger URLs
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
