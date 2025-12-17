@@ -13,7 +13,8 @@ from .serializers import (
     PurchaseHeaderSerializer, PurchaseDetailSerializer, PaymentSerializer,
     PurchaseOrderHeaderSerializer, PurchaseOrderDetailSerializer, GRNHeaderSerializer, GRNDetailSerializer,
     PurchaseOrderCreateSerializer, PurchaseOrderConvertSerializer, GenerateGRNSerializer,
-    PurchaseOrderHeaderFullSerializer, PurchaseHeaderFullSerializer
+    PurchaseOrderHeaderFullSerializer, PurchaseHeaderFullSerializer,
+    PurchaseOrderFullUpdateSerializer, PurchaseFullUpdateSerializer
 )
 from registry.models import Supplier, PaymentOption
 from products.models import Product, Unit
@@ -165,6 +166,68 @@ class PurchaseOrderRetrieveFullAPIView(APIView):
             return Response({'error': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response(PurchaseOrderHeaderFullSerializer(po).data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Update a Purchase Order header and its details atomically.",
+        request_body=PurchaseOrderFullUpdateSerializer,
+        responses={200: openapi.Response(description="PO updated"), 404: openapi.Response(description="PO not found")},
+        tags=['Purchase Orders']
+    )
+    @transaction.atomic
+    def put(self, request, po_header_id):
+        try:
+            po = PurchaseOrderHeader.objects.select_for_update().get(pk=po_header_id)
+        except PurchaseOrderHeader.DoesNotExist:
+            return Response({'error': 'PO not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        update_serializer = PurchaseOrderFullUpdateSerializer(data=request.data)
+        if not update_serializer.is_valid():
+            return Response(update_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = update_serializer.validated_data
+
+        # Update header fields
+        if 'expected_date' in data:
+            po.expected_date = data['expected_date']
+        if 'notes' in data:
+            po.notes = data['notes']
+        po.save()
+
+        user_client: UserClient = request.user
+        # Process detail operations
+        for item in data.get('details', []):
+            if item.get('delete'):
+                # Delete by id
+                if item.get('po_detail_id'):
+                    PurchaseOrderDetail.objects.filter(pk=item['po_detail_id'], po_header=po).delete()
+                continue
+            # Upsert: by id if provided, else create
+            if item.get('po_detail_id'):
+                try:
+                    pod = PurchaseOrderDetail.objects.get(pk=item['po_detail_id'], po_header=po)
+                except PurchaseOrderDetail.DoesNotExist:
+                    return Response({'error': f"PO detail not found: {item['po_detail_id']}"}, status=status.HTTP_400_BAD_REQUEST)
+                if item.get('product_id'):
+                    pod.product = Product.objects.get(pk=item['product_id'])
+                if item.get('unit_id'):
+                    pod.unit = Unit.objects.get(pk=item['unit_id'])
+                pod.quantity = item['quantity']
+                pod.price_per_unit = item['price_per_unit']
+                pod.save()
+            else:
+                product = Product.objects.get(pk=item['product_id']) if item.get('product_id') else None
+                unit = Unit.objects.get(pk=item['unit_id']) if item.get('unit_id') else None
+                if not product or not unit:
+                    return Response({'error': 'product_id and unit_id required for new detail'}, status=status.HTTP_400_BAD_REQUEST)
+                PurchaseOrderDetail.objects.create(
+                    user_client=user_client,
+                    po_header=po,
+                    product=product,
+                    unit=unit,
+                    quantity=item['quantity'],
+                    price_per_unit=item['price_per_unit'],
+                )
+
+        return Response(PurchaseOrderHeaderFullSerializer(po).data, status=status.HTTP_200_OK)
+
 
 class PurchaseOrderConvertAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -277,6 +340,81 @@ class PurchaseRetrieveFullAPIView(APIView):
             purchase = PurchaseHeader.objects.get(pk=purchase_header_id)
         except PurchaseHeader.DoesNotExist:
             return Response({'error': 'Purchase not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PurchaseHeaderFullSerializer(purchase).data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_description="Update a Purchase header and its details atomically.",
+        request_body=PurchaseFullUpdateSerializer,
+        responses={200: openapi.Response(description="Purchase updated"), 404: openapi.Response(description="Purchase not found")},
+        tags=['Purchases']
+    )
+    @transaction.atomic
+    def put(self, request, purchase_header_id):
+        try:
+            purchase = PurchaseHeader.objects.select_for_update().get(pk=purchase_header_id)
+        except PurchaseHeader.DoesNotExist:
+            return Response({'error': 'Purchase not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        update_serializer = PurchaseFullUpdateSerializer(data=request.data)
+        if not update_serializer.is_valid():
+            return Response(update_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = update_serializer.validated_data
+
+        user_client: UserClient = request.user
+        # Update header fields
+        if data.get('payment_option_id'):
+            try:
+                purchase.payment_option = PaymentOption.objects.get(pk=data['payment_option_id'])
+            except PaymentOption.DoesNotExist:
+                return Response({'error': 'Invalid payment_option_id'}, status=status.HTTP_400_BAD_REQUEST)
+        if 'invoice_number' in data:
+            purchase.invoice_number = data['invoice_number']
+        purchase.save()
+
+        # Process detail operations
+        subtotal = 0
+        for item in data.get('details', []):
+            if item.get('delete'):
+                if item.get('purchase_detail_id'):
+                    PurchaseDetail.objects.filter(pk=item['purchase_detail_id'], purchase_header=purchase).delete()
+                continue
+            if item.get('purchase_detail_id'):
+                try:
+                    pd = PurchaseDetail.objects.get(pk=item['purchase_detail_id'], purchase_header=purchase)
+                except PurchaseDetail.DoesNotExist:
+                    return Response({'error': f"Purchase detail not found: {item['purchase_detail_id']}"}, status=status.HTTP_400_BAD_REQUEST)
+                if item.get('product_id'):
+                    pd.product = Product.objects.get(pk=item['product_id'])
+                if item.get('unit_id'):
+                    pd.unit = Unit.objects.get(pk=item['unit_id'])
+                pd.quantity = item['quantity']
+                pd.price_per_unit = item['price_per_unit']
+                pd.discount = item.get('discount', pd.discount)
+                pd.save()
+                subtotal += float(pd.quantity) * float(pd.price_per_unit) - float(pd.discount or 0)
+            else:
+                product = Product.objects.get(pk=item['product_id']) if item.get('product_id') else None
+                unit = Unit.objects.get(pk=item['unit_id']) if item.get('unit_id') else None
+                if not product or not unit:
+                    return Response({'error': 'product_id and unit_id required for new detail'}, status=status.HTTP_400_BAD_REQUEST)
+                pd = PurchaseDetail.objects.create(
+                    purchase_header=purchase,
+                    user_client=user_client,
+                    product=product,
+                    unit=unit,
+                    quantity=item['quantity'],
+                    price_per_unit=item['price_per_unit'],
+                    discount=item.get('discount', 0),
+                )
+                subtotal += float(pd.quantity) * float(pd.price_per_unit) - float(pd.discount or 0)
+
+        # Recompute totals (business rules may vary)
+        purchase.subtotal = subtotal
+        purchase.total_cost = subtotal
+        # Keep remaining_balance logic simple: equals total_cost unless payments applied elsewhere
+        purchase.remaining_balance = purchase.total_cost
+        purchase.save()
+
         return Response(PurchaseHeaderFullSerializer(purchase).data, status=status.HTTP_200_OK)
 
 
